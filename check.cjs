@@ -1,0 +1,21 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const html=fs.readFileSync('friendship-html/index.html','utf8');
+const nodes=new Map(),saved=new Map();
+function node(id){if(!nodes.has(id))nodes.set(id,{value:'',textContent:'',innerHTML:'',classList:{add(){},remove(){},toggle(){}},showModal(){this.open=true},close(){this.open=false}});return nodes.get(id)}
+const context=vm.createContext({document:{getElementById:node,querySelectorAll:()=>[]},localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},window:{addEventListener(){}},setTimeout:()=>0,clearTimeout(){},console,confirm:()=>true});
+vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
+vm.runInContext("$('friendName').value='Alex';$('friendNote').value='School friend';$('friendForm').onsubmit({preventDefault(){}})",context);
+assert.equal(JSON.parse(saved.get('inner-circle-v1')).friends[0].name,'Alex');
+vm.runInContext("addMoment(state.friends[0].id,5,'Checked in','Support','2026-09-29')",context);
+assert.equal(vm.runInContext('score(state.friends[0])',context),5);
+vm.runInContext("addMoment(state.friends[0].id,-1,'Cancelled','Reliability','2026-09-29')",context);
+assert.equal(vm.runInContext('score(state.friends[0])',context),4);
+assert.equal(vm.runInContext("addMoment('missing',5,'x','Other','2026-09-29')",context),false);
+assert.throws(()=>vm.runInContext("validate({version:1,friends:[],events:[{id:'x',friendId:'missing'}]})",context));
+assert.equal(vm.runInContext("esc('<script>')",context),'&lt;script&gt;');
+const persisted=JSON.parse(saved.get('inner-circle-v1'));assert.equal(persisted.events.length,2);
+vm.runInContext('validate(JSON.parse(localStorage.getItem(KEY)))',context);
+context.localStorage.setItem=()=>{throw Error('Full')};
+assert.equal(vm.runInContext("addMoment(state.friends[0].id,5,'x','Other','2026-09-29')",context),false);
+assert.equal(vm.runInContext('score(state.friends[0])',context),4);
+console.log('PASS: add friend, points, history, persistence round trip, invalid record rejection, HTML escaping, and failed-save preservation.');
